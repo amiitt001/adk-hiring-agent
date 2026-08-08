@@ -781,6 +781,10 @@ class LauncherHandler(http.server.BaseHTTPRequestHandler):
         pass  # Suppress default logging
 
     def do_GET(self):
+        if self.path in ("/health", "/healthz"):
+            self._json_response({"status": "ok", "service": "adk-hiring-agent"})
+            return
+
         if self.path == "/" or self.path.startswith("/?"):
             env = read_env()
             html = LAUNCHER_HTML
