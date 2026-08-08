@@ -7,6 +7,13 @@ from google.adk.agents import LlmAgent
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# Synchronize GEMINI_API_KEY and GOOGLE_API_KEY
+if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
+elif os.getenv("GOOGLE_API_KEY") and not os.getenv("GEMINI_API_KEY"):
+    os.environ["GEMINI_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+
 GEMINI_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 # Rubric Builder - takes job description directly from conversation

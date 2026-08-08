@@ -26,6 +26,19 @@ except ImportError:
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+# Synchronize GEMINI_API_KEY and GOOGLE_API_KEY
+if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
+elif os.getenv("GOOGLE_API_KEY") and not os.getenv("GEMINI_API_KEY"):
+    os.environ["GEMINI_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+
+if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+    print("\n" + "=" * 60)
+    print("⚠️  WARNING: GEMINI_API_KEY is missing!")
+    print("   Please set your API key in .env or run `python launcher.py` to configure it.")
+    print("=" * 60 + "\n")
+
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 # Create AgentTools that wrap the sub-agents

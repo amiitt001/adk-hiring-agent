@@ -1,16 +1,17 @@
 """
-Launcher server - provides a web UI for users to enter their API keys
+Launcher server - provides a web UI for users to enter and test their API keys
 before starting the ADK hiring agent.
 """
 
 import http.server
 import json
 import os
-import subprocess
 import signal
+import subprocess
 import sys
 import threading
 import urllib.parse
+import requests
 
 PORT = 8888
 ADK_PORT = 8080
@@ -20,27 +21,79 @@ adk_process = None
 
 
 def read_env():
-    """Read current .env values."""
-    values = {"GEMINI_API_KEY": "", "GITHUB_TOKEN": "", "MODEL_NAME": "gemini-2.5-flash"}
+    """Read current .env values, keeping track of standard and custom keys."""
+    env_data = {
+        "GEMINI_API_KEY": "",
+        "GITHUB_TOKEN": "",
+        "MODEL_NAME": "gemini-2.5-flash",
+        "custom_keys": {}
+    }
+    
     if os.path.exists(ENV_FILE):
         with open(ENV_FILE, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     key, val = line.split("=", 1)
-                    values[key.strip()] = val.strip()
-    return values
+                    key = key.strip()
+                    val = val.strip()
+                    if key in ("GEMINI_API_KEY", "GITHUB_TOKEN", "MODEL_NAME"):
+                        env_data[key] = val
+                    elif key:
+                        env_data["custom_keys"][key] = val
+    return env_data
 
 
-def write_env(gemini_key, github_token, model_name):
-    """Write values to .env file."""
+def write_env(gemini_key, github_token, model_name, custom_keys=None):
+    """Write standard and custom API key values to .env file."""
+    lines = [
+        "# Gemini API key (Required for running agents with Gemini)",
+        f"GEMINI_API_KEY={gemini_key}",
+        "",
+        "# Model Name",
+        f"MODEL_NAME={model_name}",
+        "",
+        "# GitHub Personal Access Token (Optional for higher rate limits)",
+        f"GITHUB_TOKEN={github_token}",
+        ""
+    ]
+
+    if custom_keys and isinstance(custom_keys, dict):
+        custom_lines = []
+        for k, v in custom_keys.items():
+            k_clean = k.strip().upper().replace(" ", "_")
+            v_clean = v.strip()
+            if k_clean and v_clean:
+                custom_lines.append(f"{k_clean}={v_clean}")
+        if custom_lines:
+            lines.append("# Custom API Keys & Environment Variables")
+            lines.extend(custom_lines)
+            lines.append("")
+
     with open(ENV_FILE, "w") as f:
-        f.write(f"# Gemini API key (Required for running agents with Gemini)\n")
-        f.write(f"GEMINI_API_KEY={gemini_key}\n\n")
-        f.write(f"# Model Name\n")
-        f.write(f"MODEL_NAME={model_name}\n\n")
-        f.write(f"# GitHub Personal Access Token (Optional)\n")
-        f.write(f"GITHUB_TOKEN={github_token}\n")
+        f.write("\n".join(lines))
+
+
+def validate_gemini_key(api_key):
+    """Test if a Gemini API key is valid using Google AI Studio REST API."""
+    if not api_key:
+        return False, "Gemini API Key is required."
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return True, "API Key is valid and active!"
+        else:
+            err_msg = f"HTTP {resp.status_code}"
+            try:
+                data = resp.json()
+                if "error" in data and "message" in data["error"]:
+                    err_msg = data["error"]["message"]
+            except Exception:
+                pass
+            return False, f"Validation failed: {err_msg}"
+    except Exception as e:
+        return False, f"Network error during key validation: {str(e)}"
 
 
 def start_adk_server():
@@ -48,12 +101,14 @@ def start_adk_server():
     global adk_process
     if adk_process and adk_process.poll() is None:
         adk_process.terminate()
-        adk_process.wait(timeout=5)
+        try:
+            adk_process.wait(timeout=5)
+        except Exception:
+            pass
 
     # Kill any existing process on ADK_PORT
     os.system(f"fuser -k {ADK_PORT}/tcp 2>/dev/null")
 
-    venv_python = os.path.join(PROJECT_DIR, "venv", "bin", "python")
     venv_adk = os.path.join(PROJECT_DIR, "venv", "bin", "adk")
 
     if os.path.exists(venv_adk):
@@ -64,8 +119,13 @@ def start_adk_server():
         cwd = os.path.dirname(PROJECT_DIR)
 
     env = os.environ.copy()
-    env_values = read_env()
-    env.update(env_values)
+    env_info = read_env()
+    env["GEMINI_API_KEY"] = env_info["GEMINI_API_KEY"]
+    env["GOOGLE_API_KEY"] = env_info["GEMINI_API_KEY"]
+    env["MODEL_NAME"] = env_info["MODEL_NAME"]
+    env["GITHUB_TOKEN"] = env_info["GITHUB_TOKEN"]
+    for ck, cv in env_info["custom_keys"].items():
+        env[ck] = cv
 
     adk_process = subprocess.Popen(
         cmd, cwd=cwd, env=env,
@@ -79,7 +139,7 @@ LAUNCHER_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Hiring Agent - Setup</title>
+    <title>AI Hiring Agent - API Setup & Configuration</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -90,9 +150,9 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #0a0a1a;
-            color: #e0e0e0;
-            overflow: hidden;
+            background: #090a16;
+            color: #e2e8f0;
+            padding: 20px;
         }
 
         body::before {
@@ -102,9 +162,9 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-                        radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
-                        radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 60%);
+            background: radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                        radial-gradient(ellipse at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 60%);
             z-index: 0;
             animation: bgShift 20s ease-in-out infinite alternate;
         }
@@ -118,18 +178,18 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 520px;
-            padding: 20px;
+            max-width: 560px;
+            padding: 10px;
         }
 
         .card {
-            background: rgba(15, 15, 35, 0.85);
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(24px);
-            border: 1px solid rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.2);
             border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
-                        0 0 80px rgba(99, 102, 241, 0.05);
+            padding: 36px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5),
+                        0 0 80px rgba(99, 102, 241, 0.08);
             animation: cardEntry 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -138,11 +198,17 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 8px;
         }
 
         .logo-icon {
@@ -167,9 +233,32 @@ LAUNCHER_HTML = """<!DOCTYPE html>
 
         .subtitle {
             font-size: 13px;
-            color: #6b7280;
-            margin-bottom: 32px;
+            color: #94a3b8;
+            margin-bottom: 24px;
             line-height: 1.5;
+        }
+
+        .env-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 20px;
+        }
+
+        .env-badge-active {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .env-badge-missing {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         .form-group {
@@ -179,7 +268,7 @@ LAUNCHER_HTML = """<!DOCTYPE html>
         label {
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: space-between;
             font-size: 13px;
             font-weight: 500;
             color: #a5b4fc;
@@ -205,32 +294,96 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             color: #34d399;
         }
 
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
         input, select {
             width: 100%;
             padding: 12px 16px;
-            background: rgba(30, 30, 60, 0.6);
-            border: 1px solid rgba(99, 102, 241, 0.2);
+            padding-right: 44px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(99, 102, 241, 0.25);
             border-radius: 10px;
-            color: #e0e0e0;
+            color: #f8fafc;
             font-family: 'Inter', sans-serif;
             font-size: 14px;
             outline: none;
             transition: all 0.25s ease;
         }
 
+        select {
+            padding-right: 16px;
+            cursor: pointer;
+        }
+
         input:focus, select:focus {
-            border-color: rgba(99, 102, 241, 0.6);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            background: rgba(30, 30, 60, 0.8);
+            border-color: rgba(99, 102, 241, 0.7);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+            background: rgba(30, 41, 59, 0.85);
         }
 
         input::placeholder {
-            color: #4b5563;
+            color: #64748b;
         }
+
+        .toggle-visibility {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s ease;
+        }
+
+        .toggle-visibility:hover {
+            color: #c7d2fe;
+        }
+
+        .test-key-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 6px;
+        }
+
+        .btn-test {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #c7d2fe;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-test:hover {
+            background: rgba(99, 102, 241, 0.3);
+            color: #fff;
+        }
+
+        .key-status {
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .key-status-valid { color: #34d399; }
+        .key-status-invalid { color: #f87171; }
+        .key-status-testing { color: #818cf8; }
 
         .input-hint {
             font-size: 11px;
-            color: #4b5563;
+            color: #64748b;
             margin-top: 6px;
             line-height: 1.4;
         }
@@ -254,7 +407,7 @@ LAUNCHER_HTML = """<!DOCTYPE html>
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-top: 8px;
+            margin-top: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -269,17 +422,72 @@ LAUNCHER_HTML = """<!DOCTYPE html>
 
         .btn-primary:hover {
             transform: translateY(-1px);
-            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-primary:active {
-            transform: translateY(0);
+            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45);
         }
 
         .btn-primary:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            color: #c7d2fe;
+            padding: 8px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 8px;
+            width: auto;
+
+        }
+
+        .btn-secondary:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .custom-keys-container {
+            margin-top: 12px;
+            border-top: 1px dashed rgba(99, 102, 241, 0.2);
+            padding-top: 16px;
+        }
+
+        .custom-key-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .custom-key-row input {
+            padding-right: 12px;
+        }
+
+        .custom-key-row input.key-name {
+            width: 40%;
+        }
+
+        .custom-key-row input.key-value {
+            width: 50%;
+        }
+
+        .btn-remove-row {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-remove-row:hover {
+            background: rgba(239, 68, 68, 0.3);
         }
 
         .status {
@@ -318,8 +526,8 @@ LAUNCHER_HTML = """<!DOCTYPE html>
         }
 
         .spinner {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border: 2px solid rgba(255,255,255,0.2);
             border-top-color: white;
             border-radius: 50%;
@@ -333,71 +541,101 @@ LAUNCHER_HTML = """<!DOCTYPE html>
 
         .divider {
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.2), transparent);
-            margin: 24px 0;
+            background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.25), transparent);
+            margin: 20px 0;
         }
 
         .footer {
             text-align: center;
             margin-top: 20px;
             font-size: 11px;
-            color: #374151;
+            color: #64748b;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <div class="logo">
-                <div class="logo-icon">🤖</div>
-                <h1>AI Hiring Agent</h1>
+            <div class="header">
+                <div class="logo">
+                    <div class="logo-icon">🤖</div>
+                    <h1>AI Hiring Agent</h1>
+                </div>
             </div>
             <p class="subtitle">
-                Configure your API keys to get started with the multi-agent hiring evaluation system.
+                Configure & test your API keys to launch the multi-agent hiring evaluation system.
             </p>
+
+            <div id="envStatusBadge">__ENV_BADGE__</div>
 
             <form id="configForm">
                 <div class="form-group">
-                    <label>
-                        Gemini API Key
+                    <label for="geminiKey">
+                        <span>Gemini API Key</span>
                         <span class="badge badge-required">Required</span>
                     </label>
-                    <input type="password" id="geminiKey" placeholder="Enter your Gemini API key"
-                           value="__GEMINI_KEY__" required>
-                    <p class="input-hint">
-                        Get your key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
-                    </p>
+                    <div class="input-wrapper">
+                        <input type="password" id="geminiKey" placeholder="AIzaSy..."
+                               value="__GEMINI_KEY__" required autocomplete="off">
+                        <button type="button" class="toggle-visibility" onclick="togglePass('geminiKey', this)">👁️</button>
+                    </div>
+                    <div class="test-key-row">
+                        <p class="input-hint">
+                            Get your key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>
+                        </p>
+                        <button type="button" class="btn-test" onclick="testGeminiKey()">🧪 Test Key</button>
+                    </div>
+                    <div id="keyStatus" class="key-status" style="margin-top:4px;"></div>
                 </div>
 
                 <div class="form-group">
-                    <label>
-                        Model
+                    <label for="modelName">
+                        <span>Model</span>
                         <span class="badge badge-optional">Optional</span>
                     </label>
                     <select id="modelName">
                         <option value="gemini-2.5-flash" __SEL_25F__>Gemini 2.5 Flash (Recommended)</option>
                         <option value="gemini-2.0-flash" __SEL_20F__>Gemini 2.0 Flash</option>
                         <option value="gemini-2.5-pro" __SEL_25P__>Gemini 2.5 Pro</option>
+                        <option value="gemini-1.5-pro" __SEL_15P__>Gemini 1.5 Pro</option>
+                        <option value="gemini-1.5-flash" __SEL_15F__>Gemini 1.5 Flash</option>
                     </select>
                 </div>
 
                 <div class="divider"></div>
 
                 <div class="form-group">
-                    <label>
-                        GitHub Token
+                    <label for="githubToken">
+                        <span>GitHub Token</span>
                         <span class="badge badge-optional">Optional</span>
                     </label>
-                    <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx"
-                           value="__GITHUB_TOKEN__">
+                    <div class="input-wrapper">
+                        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx"
+                               value="__GITHUB_TOKEN__" autocomplete="off">
+                        <button type="button" class="toggle-visibility" onclick="togglePass('githubToken', this)">👁️</button>
+                    </div>
                     <p class="input-hint">
-                        For higher GitHub API rate limits. Generate at
-                        <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a>
+                        For higher GitHub API rate limits during candidate profile checks.
+                        <a href="https://github.com/settings/tokens" target="_blank">Generate token</a>
                     </p>
                 </div>
 
+                <div class="custom-keys-container">
+                    <label>
+                        <span>Additional / Custom API Keys</span>
+                        <span class="badge badge-optional">Optional</span>
+                    </label>
+                    <p class="input-hint" style="margin-bottom: 10px;">
+                        Add any extra environment variables or API keys (e.g., OPENAI_API_KEY, SERPER_API_KEY).
+                    </p>
+                    <div id="customKeysList">
+                        __CUSTOM_KEYS_HTML__
+                    </div>
+                    <button type="button" class="btn-secondary" onclick="addCustomKeyRow()">+ Add Custom API Key</button>
+                </div>
+
                 <button type="submit" class="btn btn-primary" id="submitBtn">
-                    🚀 Launch Hiring Agent
+                    🚀 Save & Launch Hiring Agent
                 </button>
             </form>
 
@@ -413,6 +651,62 @@ LAUNCHER_HTML = """<!DOCTYPE html>
         const form = document.getElementById('configForm');
         const statusEl = document.getElementById('status');
         const submitBtn = document.getElementById('submitBtn');
+        const keyStatusEl = document.getElementById('keyStatus');
+
+        function togglePass(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🔒';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+
+        async function testGeminiKey() {
+            const geminiKey = document.getElementById('geminiKey').value.trim();
+            if (!geminiKey) {
+                keyStatusEl.className = 'key-status key-status-invalid';
+                keyStatusEl.textContent = '⚠️ Please enter a Gemini API key first.';
+                return;
+            }
+
+            keyStatusEl.className = 'key-status key-status-testing';
+            keyStatusEl.innerHTML = '<span class="spinner"></span> Testing key with Google API...';
+
+            try {
+                const response = await fetch('/validate-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: geminiKey })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    keyStatusEl.className = 'key-status key-status-valid';
+                    keyStatusEl.textContent = '✅ ' + data.message;
+                } else {
+                    keyStatusEl.className = 'key-status key-status-invalid';
+                    keyStatusEl.textContent = '❌ ' + data.message;
+                }
+            } catch (err) {
+                keyStatusEl.className = 'key-status key-status-invalid';
+                keyStatusEl.textContent = '❌ Test failed: ' + err.message;
+            }
+        }
+
+        function addCustomKeyRow(keyName = '', keyValue = '') {
+            const container = document.getElementById('customKeysList');
+            const row = document.createElement('div');
+            row.className = 'custom-key-row';
+            row.innerHTML = `
+                <input type="text" class="key-name" placeholder="KEY_NAME" value="${keyName.replace(/"/g, '&quot;')}">
+                <input type="text" class="key-value" placeholder="API Key / Value" value="${keyValue.replace(/"/g, '&quot;')}">
+                <button type="button" class="btn-remove-row" onclick="this.parentElement.remove()" title="Remove key">✕</button>
+            `;
+            container.appendChild(row);
+        }
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -426,9 +720,19 @@ LAUNCHER_HTML = """<!DOCTYPE html>
                 return;
             }
 
+            const customKeys = {};
+            const keyRows = document.querySelectorAll('.custom-key-row');
+            keyRows.forEach(row => {
+                const name = row.querySelector('.key-name').value.trim();
+                const val = row.querySelector('.key-value').value.trim();
+                if (name && val) {
+                    customKeys[name] = val;
+                }
+            });
+
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> Starting...';
-            showStatus('loading', '⏳ Saving configuration and starting the agent server...');
+            submitBtn.innerHTML = '<span class="spinner"></span> Saving & Starting...';
+            showStatus('loading', '⏳ Saving configuration and launching the agent server...');
 
             try {
                 const response = await fetch('/save-config', {
@@ -437,26 +741,27 @@ LAUNCHER_HTML = """<!DOCTYPE html>
                     body: JSON.stringify({
                         gemini_key: geminiKey,
                         github_token: githubToken,
-                        model_name: modelName
+                        model_name: modelName,
+                        custom_keys: customKeys
                     })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    showStatus('success', '✅ Configuration saved! Redirecting to the agent UI...');
+                    showStatus('success', '✅ Configuration saved successfully! Launching agent UI...');
                     setTimeout(() => {
                         window.location.href = 'http://' + window.location.hostname + ':__ADK_PORT__';
                     }, 2000);
                 } else {
-                    showStatus('error', '❌ Error: ' + (data.error || 'Unknown error'));
+                    showStatus('error', '❌ Error saving config: ' + (data.error || 'Unknown error'));
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '🚀 Launch Hiring Agent';
+                    submitBtn.innerHTML = '🚀 Save & Launch Hiring Agent';
                 }
             } catch (err) {
                 showStatus('error', '❌ Connection failed: ' + err.message);
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '🚀 Launch Hiring Agent';
+                submitBtn.innerHTML = '🚀 Save & Launch Hiring Agent';
             }
         });
 
@@ -477,14 +782,39 @@ class LauncherHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/" or self.path.startswith("/?"):
             env = read_env()
             html = LAUNCHER_HTML
-            html = html.replace("__GEMINI_KEY__", env.get("GEMINI_API_KEY", ""))
-            html = html.replace("__GITHUB_TOKEN__", env.get("GITHUB_TOKEN", ""))
+            
+            gemini_key = env.get("GEMINI_API_KEY", "")
+            github_token = env.get("GITHUB_TOKEN", "")
+            model = env.get("MODEL_NAME", "gemini-2.5-flash")
+
+            if gemini_key:
+                env_badge = '<div class="env-badge env-badge-active">● Active .env Configuration Loaded</div>'
+            else:
+                env_badge = '<div class="env-badge env-badge-missing">⚠️ No API Key Configured Yet</div>'
+
+            html = html.replace("__ENV_BADGE__", env_badge)
+            html = html.replace("__GEMINI_KEY__", gemini_key)
+            html = html.replace("__GITHUB_TOKEN__", github_token)
             html = html.replace("__ADK_PORT__", str(ADK_PORT))
 
-            model = env.get("MODEL_NAME", "gemini-2.5-flash")
             html = html.replace("__SEL_25F__", "selected" if model == "gemini-2.5-flash" else "")
             html = html.replace("__SEL_20F__", "selected" if model == "gemini-2.0-flash" else "")
             html = html.replace("__SEL_25P__", "selected" if model == "gemini-2.5-pro" else "")
+            html = html.replace("__SEL_15P__", "selected" if model == "gemini-1.5-pro" else "")
+            html = html.replace("__SEL_15F__", "selected" if model == "gemini-1.5-flash" else "")
+
+            custom_keys_html = ""
+            for k, v in env.get("custom_keys", {}).items():
+                escaped_k = k.replace('"', '&quot;')
+                escaped_v = v.replace('"', '&quot;')
+                custom_keys_html += f'''
+                <div class="custom-key-row">
+                    <input type="text" class="key-name" placeholder="KEY_NAME" value="{escaped_k}">
+                    <input type="text" class="key-value" placeholder="API Key / Value" value="{escaped_v}">
+                    <button type="button" class="btn-remove-row" onclick="this.parentElement.remove()" title="Remove key">✕</button>
+                </div>'''
+
+            html = html.replace("__CUSTOM_KEYS_HTML__", custom_keys_html)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -495,21 +825,31 @@ class LauncherHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        if self.path == "/save-config":
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length).decode()
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length).decode()
 
+        if self.path == "/validate-key":
+            try:
+                data = json.loads(body)
+                api_key = data.get("api_key", "").strip()
+                valid, msg = validate_gemini_key(api_key)
+                self._json_response({"success": valid, "message": msg})
+            except Exception as e:
+                self._json_response({"success": False, "message": f"Validation error: {str(e)}"})
+
+        elif self.path == "/save-config":
             try:
                 data = json.loads(body)
                 gemini_key = data.get("gemini_key", "").strip()
                 github_token = data.get("github_token", "").strip()
                 model_name = data.get("model_name", "gemini-2.5-flash").strip()
+                custom_keys = data.get("custom_keys", {})
 
                 if not gemini_key:
                     self._json_response({"success": False, "error": "Gemini API key is required"})
                     return
 
-                write_env(gemini_key, github_token, model_name)
+                write_env(gemini_key, github_token, model_name, custom_keys)
 
                 # Start ADK server in background
                 threading.Thread(target=start_adk_server, daemon=True).start()
@@ -542,14 +882,14 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, cleanup)
 
     print(f"""
-╔══════════════════════════════════════════════════╗
-║        🤖 AI Hiring Agent - Launcher             ║
-╠══════════════════════════════════════════════════╣
-║                                                  ║
-║  Setup page:  http://localhost:{PORT}              ║
-║  Agent UI:    http://localhost:{ADK_PORT} (after setup) ║
-║                                                  ║
-╚══════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════╗
+║             🤖 AI Hiring Agent - Setup Launcher          ║
+╠══════════════════════════════════════════════════════════╣
+║                                                          ║
+║  🔑 API Setup Page: http://localhost:{PORT}                 ║
+║  🤖 Agent Web UI:   http://localhost:{ADK_PORT} (after setup)    ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
 """)
 
     server = http.server.HTTPServer(("0.0.0.0", PORT), LauncherHandler)
