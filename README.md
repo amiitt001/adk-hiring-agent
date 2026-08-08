@@ -64,7 +64,7 @@ This project provides a multi-agent system that automates technical candidate ev
    Create a `.env` file in the project root:
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
-   MODEL_NAME=gemini-2.5-flash
+   MODEL_NAME=gemini-3.5-flash
    GITHUB_TOKEN=your_github_token_here  # Optional
    ```
 

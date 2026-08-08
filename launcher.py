@@ -25,7 +25,7 @@ def read_env():
     env_data = {
         "GEMINI_API_KEY": "",
         "GITHUB_TOKEN": "",
-        "MODEL_NAME": "gemini-2.5-flash",
+        "MODEL_NAME": "gemini-3.5-flash",
         "custom_keys": {}
     }
     
@@ -594,7 +594,8 @@ LAUNCHER_HTML = """<!DOCTYPE html>
                         <span class="badge badge-optional">Optional</span>
                     </label>
                     <select id="modelName">
-                        <option value="gemini-2.5-flash" __SEL_25F__>Gemini 2.5 Flash (Recommended)</option>
+                        <option value="gemini-3.5-flash" __SEL_35F__>Gemini 3.5 Flash (Recommended)</option>
+                        <option value="gemini-2.5-flash" __SEL_25F__>Gemini 2.5 Flash</option>
                         <option value="gemini-2.0-flash" __SEL_20F__>Gemini 2.0 Flash</option>
                         <option value="gemini-2.5-pro" __SEL_25P__>Gemini 2.5 Pro</option>
                         <option value="gemini-1.5-pro" __SEL_15P__>Gemini 1.5 Pro</option>
@@ -785,7 +786,7 @@ class LauncherHandler(http.server.BaseHTTPRequestHandler):
             
             gemini_key = env.get("GEMINI_API_KEY", "")
             github_token = env.get("GITHUB_TOKEN", "")
-            model = env.get("MODEL_NAME", "gemini-2.5-flash")
+            model = env.get("MODEL_NAME", "gemini-3.5-flash")
 
             if gemini_key:
                 env_badge = '<div class="env-badge env-badge-active">● Active .env Configuration Loaded</div>'
@@ -797,6 +798,7 @@ class LauncherHandler(http.server.BaseHTTPRequestHandler):
             html = html.replace("__GITHUB_TOKEN__", github_token)
             html = html.replace("__ADK_PORT__", str(ADK_PORT))
 
+            html = html.replace("__SEL_35F__", "selected" if model == "gemini-3.5-flash" else "")
             html = html.replace("__SEL_25F__", "selected" if model == "gemini-2.5-flash" else "")
             html = html.replace("__SEL_20F__", "selected" if model == "gemini-2.0-flash" else "")
             html = html.replace("__SEL_25P__", "selected" if model == "gemini-2.5-pro" else "")

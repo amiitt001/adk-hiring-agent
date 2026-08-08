@@ -39,7 +39,7 @@ if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
     print("   Please set your API key in .env or run `python launcher.py` to configure it.")
     print("=" * 60 + "\n")
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.5-flash")
 
 # Create AgentTools that wrap the sub-agents
 rubric_tool = AgentTool(agent=rubric_builder)

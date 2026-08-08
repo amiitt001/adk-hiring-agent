@@ -14,7 +14,7 @@ if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
 elif os.getenv("GOOGLE_API_KEY") and not os.getenv("GEMINI_API_KEY"):
     os.environ["GEMINI_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
-GEMINI_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("MODEL_NAME", "gemini-3.5-flash")
 
 # Rubric Builder - takes job description directly from conversation
 rubric_builder = LlmAgent(
