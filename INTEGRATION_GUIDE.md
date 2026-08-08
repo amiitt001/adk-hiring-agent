@@ -21,7 +21,7 @@ If you deployed the workflow to Render or imported `adk_hiring_agent_n8n_workflo
 ### Node.js / JavaScript (Fetch / Axios)
 ```javascript
 async function evaluateCandidate(jobDescription, resumeText, githubUsername) {
-  const response = await fetch('https://your-n8n-or-render-app.com/webhook/adk-hiring-agent', {
+  const response = await fetch('https://adk-hiring-agent.onrender.com/webhook/adk-hiring-agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -45,7 +45,7 @@ async function evaluateCandidate(jobDescription, resumeText, githubUsername) {
 import requests
 
 def evaluate_candidate(job_description: str, resume: str, github_username: str = ""):
-    url = "https://your-n8n-or-render-app.com/webhook/adk-hiring-agent"
+    url = "https://adk-hiring-agent.onrender.com/webhook/adk-hiring-agent"
     payload = {
         "job_description": job_description,
         "resume": resume,

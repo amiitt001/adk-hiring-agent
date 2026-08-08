@@ -4,6 +4,13 @@ This guide provides step-by-step instructions to deploy the **AI-Powered Convers
 
 ---
 
+## 🌐 Live Service Information
+
+- **Live Service URL:** `https://adk-hiring-agent.onrender.com`
+- **Health Check Endpoint:** `https://adk-hiring-agent.onrender.com/health`
+
+---
+
 ## ⚡ Option 1: Render Blueprint (1-Click Deployment - Recommended)
 
 Render supports Infrastructure-as-Code using the [`render.yaml`](file:///home/orion/Downloads/adk-hiring-agent-main/adk-hiring-agent-main/render.yaml) file included in this repository.
