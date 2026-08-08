@@ -22,7 +22,7 @@ echo "========================================================"
 if [ -n "$GEMINI_API_KEY" ]; then
     echo "✅ GEMINI_API_KEY detected in environment variables!"
     echo "Starting ADK Web Server on ${HOST}:${PORT}..."
-    exec adk web --host "$HOST" --port "$PORT" .
+    exec adk web --host "$HOST" --port "$PORT" --allow_origins "*" .
 else
     echo "⚠️  No GEMINI_API_KEY found in environment variables."
     echo "Starting Setup Launcher on ${HOST}:${PORT}..."

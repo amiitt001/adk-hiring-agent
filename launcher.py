@@ -113,10 +113,10 @@ def start_adk_server():
     venv_adk = os.path.join(PROJECT_DIR, "venv", "bin", "adk")
 
     if os.path.exists(venv_adk):
-        cmd = [venv_adk, "web", "--host", HOST, "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
+        cmd = [venv_adk, "web", "--host", HOST, "--port", str(ADK_PORT), "--allow_origins", "*", PROJECT_DIR.split("/")[-1]]
         cwd = os.path.dirname(PROJECT_DIR)
     else:
-        cmd = ["adk", "web", "--host", HOST, "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
+        cmd = ["adk", "web", "--host", HOST, "--port", str(ADK_PORT), "--allow_origins", "*", PROJECT_DIR.split("/")[-1]]
         cwd = os.path.dirname(PROJECT_DIR)
 
     env = os.environ.copy()
