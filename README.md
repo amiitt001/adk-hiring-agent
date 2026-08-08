@@ -82,4 +82,16 @@ This project provides a multi-agent system that automates technical candidate ev
 
 ---
 
+## 🌐 Cloud Deployment (Render.com)
+
+You can easily deploy this system on Render using 1-Click Blueprint or Manual setup:
+
+- **Render Blueprint:** Connect your repository on Render and select `render.yaml`.
+- **Start Command:** `./start.sh`
+- **Environment Variables:** Set `GEMINI_API_KEY` in your Render dashboard.
+
+See [`RENDER_DEPLOYMENT.md`](file:///home/orion/Downloads/adk-hiring-agent-main/adk-hiring-agent-main/RENDER_DEPLOYMENT.md) for full instructions.
+
+---
+
 **Good luck, and happy building!** 🚀

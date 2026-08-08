@@ -1,0 +1,468 @@
+{
+  "name": "ADK Conversational Hiring Agent Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "adk-hiring-agent",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "node-manual-trigger",
+      "name": "Manual Test Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract parameters from webhook body or test input\nconst body = $input.first().json.body || $input.first().json;\n\nconst job_description = body.job_description || `Senior Python & AI Engineer\nRequirements:\n- 5+ years of experience with Python, FastAPI, Django\n- Hands-on experience with LLMs, LangChain, Google ADK, OpenAI\n- Strong background in building REST APIs and microservices\n- Proficiency in Docker, PostgreSQL, CI/CD\n- B.S. in Computer Science or equivalent experience`;\n\nconst resume = body.resume || `Candidate Name: Alex Mercer\nEmail: alex.mercer@example.com\nGitHub: https://github.com/octocat\nExperience:\n- Senior Backend Developer at TechCorp (2021 - Present, 3.5 yrs): Built scalable Python microservices using FastAPI & PostgreSQL. Integrated Gemini and OpenAI LLMs into internal workflows.\n- Software Engineer at DataSoft (2019 - 2021, 2 yrs): Developed REST APIs with Django and Docker.\nEducation: B.S. Computer Science, State University (2019)`;\n\nconst github_username = body.github_username || \"\";\nconst gemini_api_key = body.gemini_api_key || process.env.GEMINI_API_KEY || \"\";\nconst model_name = body.model_name || process.env.MODEL_NAME || \"gemini-2.5-flash\";\nconst github_token = body.github_token || process.env.GITHUB_TOKEN || \"\";\n\nreturn {\n  json: {\n    job_description,\n    resume,\n    github_username,\n    gemini_api_key,\n    model_name,\n    github_token\n  }\n};"
+      },
+      "id": "node-prepare-input",
+      "name": "Prepare Input & API Keys",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model_name || 'gemini-2.5-flash' }}:generateContent?key={{ $json.gemini_api_key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"systemInstruction\": {\n    \"parts\": [{ \"text\": \"You are an expert HR assessment designer with deep experience in creating objective, measurable evaluation criteria for technical roles.\\n\\n## YOUR TASK:\\nAnalyze the job description from the conversation history and create a comprehensive, role-specific evaluation rubric that will be used to assess candidates.\\n\\n## OUTPUT STRUCTURE:\\n\\n### LEVEL 1: RESUME EVALUATION (10 points total)\\n\\n**1. Technical Skills Match (4 points)**\\n- 4 points: All required technical skills present with strong evidence across multiple experiences\\n  * List the SPECIFIC required skills from the JD (e.g., Python, Django, PostgreSQL, Docker)\\n  * Define what \\\"strong evidence\\\" means for this role\\n- 3 points: Most required skills present (75%+), some with depth\\n- 2 points: Some required skills present (50-75%), limited depth\\n- 1 point: Few required skills (<50%), mostly surface-level mentions\\n- 0 points: No technical skill alignment\\n\\n**2. Experience Level (3 points)**\\n- 3 points: Meets or exceeds required years with progressive responsibility\\n- 2 points: Within 1 year of requirement with relevant experience\\n- 1 point: 2+ years below requirement but compensating factors present\\n- 0 points: Significantly below requirements with no compensating factors\\n\\n**3. Education & Qualifications (2 points)**\\n- 2 points: Meets stated education requirements\\n- 1 point: Related education or significant self-taught evidence\\n- 0 points: Does not meet requirements\\n\\n**4. Role Relevance & Domain Fit (1 point)**\\n- 1 point: Previous roles highly relevant to this position\\n- 0 points: Different domain or significantly different role type\\n\\n### LEVEL 2: GITHUB EVALUATION (10 points total)\\n\\n**1. Repository Quality (3 points)**\\n- 3 points: Multiple well-architected projects\\n- 2 points: Some quality projects with good practices\\n- 1 point: Basic projects or limited complexity\\n- 0 points: Poor code quality or trivial projects only\\n\\n**2. Technology Stack Alignment (3 points)**\\n- 3 points: Strong evidence of required tech stack\\n- 2 points: Some relevant technologies, moderate depth\\n- 1 point: Limited evidence of required tech stack\\n- 0 points: No technology alignment\\n\\n**3. Activity & Consistency (2 points)**\\n- 2 points: Active contributions in past 6 months, consistent commit patterns\\n- 1 point: Some activity in past 6-12 months or sporadic contributions\\n- 0 points: No recent activity (12+ months) or very infrequent\\n\\n**4. Documentation & Testing (2 points)**\\n- 2 points: Good READMEs, code comments, visible test coverage\\n- 1 point: Basic documentation present\\n- 0 points: No documentation or tests\\n\\nReturn ONLY the rubric, no preamble text.\" }]\n  },\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Job Description:\\n\" + JSON.stringify($json.job_description)\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "neverError": true
+        }
+      },
+      "id": "node-rubric-builder-llm",
+      "name": "Step 1: RubricBuilder (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        580,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Prepare Input & API Keys').first().json;\nconst geminiResp = $input.first().json;\n\nlet rubricText = \"\";\nif (geminiResp.candidates && geminiResp.candidates[0]?.content?.parts[0]?.text) {\n  rubricText = geminiResp.candidates[0].content.parts[0].text;\n} else if (geminiResp.error) {\n  rubricText = \"Error from Gemini API: \" + (geminiResp.error.message || JSON.stringify(geminiResp.error));\n} else {\n  rubricText = \"Unexpected Gemini API response format: \" + JSON.stringify(geminiResp);\n}\n\nreturn {\n  json: {\n    ...prev,\n    rubric: rubricText\n  }\n};"
+      },
+      "id": "node-parse-rubric",
+      "name": "Parse Rubric Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model_name || 'gemini-2.5-flash' }}:generateContent?key={{ $json.gemini_api_key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"systemInstruction\": {\n    \"parts\": [{ \"text\": \"You are a senior technical recruiter with 10+ years of experience evaluating engineering candidates.\\n\\n## YOUR TASK:\\nPerform a thorough, evidence-based Level 1 resume evaluation using the rubric from the conversation history.\\n\\n## OUTPUT FORMAT:\\n\\n**CANDIDATE:** [Extract full name from resume]\\n\\n**SCORE: X/10**\\n\\n**DETAILED BREAKDOWN:**\\n\\n**1. Technical Skills Match: X/4 points**\\n- Required skills found: [list with resume citations]\\n- Required skills missing: [list what's not mentioned]\\n- Evidence quality: [superficial mentions vs. detailed project work]\\n- Justification: [explain the score based on rubric criteria]\\n\\n**2. Experience Level: X/3 points**\\n- Total years: [calculate from resume dates]\\n- Relevant years: [years in similar roles/technologies]\\n- Progression: [junior \\u2192 mid \\u2192 senior trajectory observed?]\\n- Justification: [explain score]\\n\\n**3. Education & Qualifications: X/2 points**\\n- Degree(s): [list with institutions and years]\\n- Certifications: [list if any]\\n- Alignment: [how well it matches requirements]\\n- Justification: [explain score]\\n\\n**4. Role Relevance & Domain Fit: X/1 point**\\n- Previous roles: [list titles and companies]\\n- Domain match: [industry/sector alignment]\\n- Level match: [seniority alignment]\\n- Justification: [explain score]\\n\\n**KEY STRENGTHS:**\\n- [Strength 1 with specific resume citation]\\n- [Strength 2 with citation]\\n\\n**CRITICAL GAPS:**\\n- [Gap 1 - be specific about what's missing or weak]\\n- [Gap 2 - cite evidence of absence]\\n\\n**GITHUB INFORMATION:**\\n- GitHub URL/Username: [extract if present, otherwise \\\"Not provided\\\"]\\n- Source: [where in resume it was found]\\n\\n**RECOMMENDATION:** \\n**[YES/NO] - Proceed to GitHub Evaluation**\\n\\n**Rationale:** [1-2 sentences explaining whether candidate meets baseline requirements for resume screen.]\\n\\nReturn the complete evaluation following the format above.\" }]\n  },\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"EVALUATION RUBRIC:\\n\" + JSON.stringify($json.rubric) + \"\\n\\nCANDIDATE RESUME:\\n\" + JSON.stringify($json.resume)\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "neverError": true
+        }
+      },
+      "id": "node-resume-reviewer-llm",
+      "name": "Step 2: ResumeReviewer (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1020,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Parse Rubric Output').first().json;\nconst geminiResp = $input.first().json;\n\nlet resumeEvalText = \"\";\nif (geminiResp.candidates && geminiResp.candidates[0]?.content?.parts[0]?.text) {\n  resumeEvalText = geminiResp.candidates[0].content.parts[0].text;\n} else if (geminiResp.error) {\n  resumeEvalText = \"Error evaluating resume: \" + (geminiResp.error.message || JSON.stringify(geminiResp.error));\n} else {\n  resumeEvalText = \"Unexpected response: \" + JSON.stringify(geminiResp);\n}\n\n// Robust GitHub username extraction\nlet username = prev.github_username || \"\";\nif (!username) {\n  const match = prev.resume.match(/github\\.com\\/([a-zA-Z0-9_-]+)/i) || resumeEvalText.match(/github\\.com\\/([a-zA-Z0-9_-]+)/i);\n  if (match && match[1]) {\n    username = match[1];\n  }\n}\n\n// Clean username (handle URLs, @, trailing slashes, query params)\nif (username.includes(\"github.com/\")) {\n  const parts = username.split(\"github.com/\");\n  username = parts[parts.length - 1].split(\"/\")[0].split(\"?\")[0];\n}\nusername = username.replace(/^@/, '').replace(/\\/$/, '').trim();\n\nreturn {\n  json: {\n    ...prev,\n    resume_evaluation: resumeEvalText,\n    github_username: username\n  }\n};"
+      },
+      "id": "node-parse-resume-eval",
+      "name": "Parse Resume Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-github",
+              "leftValue": "={{ $json.github_username }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-github-exists",
+      "name": "Has GitHub Username?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/users/{{ $json.github_username }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-ADK-Hiring-Agent"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "neverError": true
+        }
+      },
+      "id": "node-github-api-validator",
+      "name": "Step 3: GitHub REST API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1700,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Parse Resume Evaluation').first().json;\nconst apiData = $input.first().json;\n\nlet githubValidationReport = {};\n\nif (apiData.login) {\n  githubValidationReport = {\n    status: \"PASSED\",\n    username: apiData.login,\n    name: apiData.name || \"Not provided\",\n    company: apiData.company || \"Not provided\",\n    location: apiData.location || \"Not provided\",\n    bio: apiData.bio || \"Not provided\",\n    public_repos: apiData.public_repos || 0,\n    followers: apiData.followers || 0,\n    following: apiData.following || 0,\n    created_at: apiData.created_at || \"\",\n    html_url: apiData.html_url || `https://github.com/${prev.github_username}`\n  };\n} else {\n  githubValidationReport = {\n    status: \"FAILED\",\n    username: prev.github_username,\n    error: apiData.message || \"Account not found on GitHub API\"\n  };\n}\n\nreturn {\n  json: {\n    ...prev,\n    github_validation: githubValidationReport\n  }\n};"
+      },
+      "id": "node-process-github-data",
+      "name": "Process GitHub API Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model_name || 'gemini-2.5-flash' }}:generateContent?key={{ $json.gemini_api_key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"systemInstruction\": {\n    \"parts\": [{ \"text\": \"You are a senior software engineer and technical lead with extensive experience evaluating code quality and developer portfolios.\\n\\n## YOUR TASK:\\nPerform a comprehensive Level 2 GitHub evaluation based on the rubric, validation results, and job requirements from the input.\\n\\n## OUTPUT FORMAT:\\n\\n**GITHUB PROFILE ANALYSIS**\\n\\n**CANDIDATE:** [name from resume]\\n**GITHUB USERNAME:** [from input]\\n\\n**OVERALL SCORE: X/10**\\n\\n---\\n\\n**1. Repository Quality: X/3 points**\\n- Assessment & Justification\\n\\n**2. Technology Stack Alignment: X/3 points**\\n- Assessment & Justification\\n\\n**3. Activity & Consistency: X/2 points**\\n- Assessment & Justification\\n\\n**4. Documentation & Testing: X/2 points**\\n- Assessment & Justification\\n\\n---\\n\\n**KEY STRENGTHS:**\\n- [Strength 1]\\n- [Strength 2]\\n\\n**AREAS FOR IMPROVEMENT / VERIFICATION NEEDED:**\\n- [Area 1]\\n- [Area 2]\\n\\n**RECOMMENDATION:** \\n**[PASS/FAIL] for GitHub Screen**\\n\\n**Rationale:** [2-3 sentences explaining the assessment.]\\n\\nReturn the complete analysis following the format above.\" }]\n  },\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"EVALUATION RUBRIC:\\n\" + JSON.stringify($json.rubric) + \"\\n\\nRESUME EVALUATION:\\n\" + JSON.stringify($json.resume_evaluation) + \"\\n\\nGITHUB API VALIDATION METADATA:\\n\" + JSON.stringify($json.github_validation)\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "neverError": true
+        }
+      },
+      "id": "node-github-reviewer-llm",
+      "name": "Step 4: GitHubReviewer (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2140,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Process GitHub API Data').first().json;\nconst geminiResp = $input.first().json;\n\nlet githubEvalText = \"\";\nif (geminiResp.candidates && geminiResp.candidates[0]?.content?.parts[0]?.text) {\n  githubEvalText = geminiResp.candidates[0].content.parts[0].text;\n} else if (geminiResp.error) {\n  githubEvalText = \"Error evaluating GitHub: \" + (geminiResp.error.message || JSON.stringify(geminiResp.error));\n} else {\n  githubEvalText = \"Unexpected response: \" + JSON.stringify(geminiResp);\n}\n\nreturn {\n  json: {\n    ...prev,\n    github_evaluation: githubEvalText\n  }\n};"
+      },
+      "id": "node-parse-github-eval",
+      "name": "Parse GitHub Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Parse Resume Evaluation').first().json;\n\nreturn {\n  json: {\n    ...prev,\n    github_validation: { status: \"SKIPPED\", reason: \"No GitHub profile provided\" },\n    github_evaluation: \"GitHub Evaluation Skipped (No GitHub profile URL or username provided).\"\n  }\n};"
+      },
+      "id": "node-skip-github",
+      "name": "Skip GitHub Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $json.model_name || 'gemini-2.5-flash' }}:generateContent?key={{ $json.gemini_api_key }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"systemInstruction\": {\n    \"parts\": [{ \"text\": \"You are a senior technical hiring manager with 15+ years of experience making high-stakes hiring decisions.\\n\\n## YOUR TASK:\\nReview ALL evaluation data from the input and provide a clear, justified, actionable hiring recommendation.\\n\\n## OUTPUT FORMAT:\\n\\n# \\ud83c\\udfaf FINAL HIRING VERDICT\\n\\n**CANDIDATE:** [Full name]\\n**POSITION:** [Role title from JD]\\n\\n---\\n\\n## DECISION\\n\\n### \\ud83d\\udd34 NO HIRE  /  \\ud83d\\udfe2 HIRE\\n\\n**CONFIDENCE LEVEL:** High / Medium / Low\\n\\n**COMPOSITE SCORE:** [Calculate: If both levels done: (Resume*0.5 + GitHub*0.5). If only resume: Resume score]/10\\n\\n---\\n\\n## EVALUATION SUMMARY\\n\\n**\\ud83d\\udcca Level 1 - Resume Screening:**\\n- Score: X/10\\n- Status: [Exceeded/Met/Below expectations]\\n- Key finding: [One sentence summary]\\n\\n**\\ud83d\\udcca Level 2 - GitHub Analysis:**\\n- Score: X/10 (or \\\"Not performed\\\")\\n- Status: [Exceeded/Met/Below expectations]\\n- Key finding: [One sentence summary]\\n\\n---\\n\\n## DECISION RATIONALE\\n\\n### \\u2705 COMPELLING STRENGTHS:\\n1. **[Strength category]**: [Evidence and Impact]\\n2. **[Strength category]**: [Evidence and Impact]\\n\\n### \\u26a0\\ufe0f CRITICAL CONCERNS:\\n1. **[Concern category]**: [Weakness and Risk level]\\n2. **[Concern category]**: [Weakness and Risk level]\\n\\n---\\n\\n## OVERALL ASSESSMENT & RECOMMENDED NEXT STEPS\\n\\nReturn the complete verdict following the format above.\" }]\n  },\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"JOB DESCRIPTION:\\n\" + JSON.stringify($json.job_description) + \"\\n\\nEVALUATION RUBRIC:\\n\" + JSON.stringify($json.rubric) + \"\\n\\nRESUME EVALUATION:\\n\" + JSON.stringify($json.resume_evaluation) + \"\\n\\nGITHUB EVALUATION:\\n\" + JSON.stringify($json.github_evaluation)\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "neverError": true
+        }
+      },
+      "id": "node-verdict-synthesizer-llm",
+      "name": "Step 5: VerdictSynthesizer (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiResp = $input.first().json;\n\n// Retrieve input data passed into Step 5\nconst prev = $node[\"Step 5: VerdictSynthesizer (LLM)\"].input.item.json;\n\nlet verdictText = \"\";\nif (geminiResp.candidates && geminiResp.candidates[0]?.content?.parts[0]?.text) {\n  verdictText = geminiResp.candidates[0].content.parts[0].text;\n} else if (geminiResp.error) {\n  verdictText = \"Error synthesizing verdict: \" + (geminiResp.error.message || JSON.stringify(geminiResp.error));\n} else {\n  verdictText = \"Unexpected response: \" + JSON.stringify(geminiResp);\n}\n\n// Extract Decision (HIRE vs NO HIRE)\nlet decision = \"UNKNOWN\";\nif (verdictText.includes(\"\ud83d\udfe2 HIRE\") || verdictText.includes(\"HIRE\")) {\n  decision = \"HIRE\";\n} else if (verdictText.includes(\"\ud83d\udd34 NO HIRE\") || verdictText.includes(\"NO HIRE\")) {\n  decision = \"NO HIRE\";\n}\n\n// Extract Score\nconst scoreMatch = verdictText.match(/COMPOSITE SCORE:\\s*([\\d\\.]+\\/10)/i);\nconst composite_score = scoreMatch ? scoreMatch[1] : \"N/A\";\n\n// Extract Candidate Name\nconst candidateMatch = (prev.resume_evaluation || \"\").match(/CANDIDATE:\\s*([^\n]+)/i);\nconst candidate_name = candidateMatch ? candidateMatch[1].trim() : \"Candidate\";\n\nreturn {\n  json: {\n    success: true,\n    candidate_name,\n    decision,\n    composite_score,\n    summary: {\n      rubric: prev.rubric,\n      resume_evaluation: prev.resume_evaluation,\n      github_validation: prev.github_validation,\n      github_evaluation: prev.github_evaluation,\n      final_verdict: verdictText\n    }\n  }\n};"
+      },
+      "id": "node-format-final-response",
+      "name": "Format Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2820,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input & API Keys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Input & API Keys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Input & API Keys": {
+      "main": [
+        [
+          {
+            "node": "Step 1: RubricBuilder (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1: RubricBuilder (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Parse Rubric Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Rubric Output": {
+      "main": [
+        [
+          {
+            "node": "Step 2: ResumeReviewer (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2: ResumeReviewer (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Parse Resume Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Resume Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Has GitHub Username?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has GitHub Username?": {
+      "main": [
+        [
+          {
+            "node": "Step 3: GitHub REST API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip GitHub Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3: GitHub REST API": {
+      "main": [
+        [
+          {
+            "node": "Process GitHub API Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process GitHub API Data": {
+      "main": [
+        [
+          {
+            "node": "Step 4: GitHubReviewer (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 4: GitHubReviewer (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Parse GitHub Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse GitHub Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Step 5: VerdictSynthesizer (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip GitHub Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Step 5: VerdictSynthesizer (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 5: VerdictSynthesizer (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

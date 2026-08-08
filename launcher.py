@@ -13,8 +13,9 @@ import threading
 import urllib.parse
 import requests
 
-PORT = 8888
-ADK_PORT = 8080
+PORT = int(os.getenv("PORT", "8888"))
+ADK_PORT = int(os.getenv("ADK_PORT", "8080"))
+HOST = os.getenv("HOST", "0.0.0.0")
 ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 adk_process = None
@@ -112,10 +113,10 @@ def start_adk_server():
     venv_adk = os.path.join(PROJECT_DIR, "venv", "bin", "adk")
 
     if os.path.exists(venv_adk):
-        cmd = [venv_adk, "web", "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
+        cmd = [venv_adk, "web", "--host", HOST, "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
         cwd = os.path.dirname(PROJECT_DIR)
     else:
-        cmd = ["adk", "web", "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
+        cmd = ["adk", "web", "--host", HOST, "--port", str(ADK_PORT), PROJECT_DIR.split("/")[-1]]
         cwd = os.path.dirname(PROJECT_DIR)
 
     env = os.environ.copy()
