@@ -1,0 +1,5 @@
+google-genai
+google-adk
+python-dotenv
+requests>=2.31.0
+
