@@ -1,97 +1,74 @@
-# AI-Powered Conversational Hiring Agent
+# ADK Hiring Agent
 
-Welcome to the **AI-Powered Conversational Hiring Agent System** built using Google's ADK (Agent Development Kit) and Gemini models!
+This repository keeps the original V1 snapshot and the actively maintained V2 implementation side by side. V1 is preserved from the original commit; new changes belong in [`V2/`](./V2/).
 
-> Made with ❤️ by Amit Verma
+## Choose a version
 
-## Overview
+| | V1 | V2 |
+|---|---|---|
+| Purpose | Original reference implementation | Audited, actively maintained implementation |
+| Source | Exact snapshot of original tracked commit `7232ba3` | Current audited code, tests, deployment files, and reports |
+| Agent behavior | Original prompts and orchestration, including its original limitations | Human-review decision support, more cautious evidence handling, and no fabricated GitHub repository assessments |
+| GitHub | Original profile integration | Bounded profile validation; repository-level quality remains unassessed |
+| Security | Original behavior | Hardened local launcher and deployment startup; public app authentication remains a blocker |
+| Tests | None in the original baseline | Mocked GitHub and launcher tests, ADK discovery check, and n8n formatter checks |
 
-This project provides a multi-agent system that automates technical candidate evaluation through a conversational interface. The system uses specialized AI agents to evaluate resumes, validate GitHub profiles, and provide comprehensive hiring recommendations.
+See the [version architecture comparison](./V2/VERSION_COMPARISON.md), [V2 architecture review](./V2/ARCHITECTURE_REVIEW.md), and [audit scorecard](./V2/AUDIT_REPORT.md) for details. V2 is not production-ready: public ADK Web and the sample n8n webhook have no authentication.
 
-### Features & System Components
+## Prerequisites
 
-- **5 Specialized AI Agents**: RubricBuilder, ResumeReviewer, GitHubValidator, GitHubReviewer, VerdictSynthesizer
-- **1 Root Orchestrator**: Conversational coordinator that manages the evaluation workflow
-- **Interactive Setup Launcher**: Web-based configuration manager to enter, test, and save API keys
-- **Real-time API Integration**: Live GitHub account validation and Gemini LLM orchestration
-- **Structured Evaluation Framework**: Objective, measurable criteria with scoring
-- **End-to-End Workflow**: From job description to final HIRE/NO HIRE decision
+- Python 3.10 or newer for the current Google ADK dependency range.
+- A Gemini API key. Do not commit `.env`, API keys, or GitHub tokens.
+- Optional GitHub token for a higher API rate limit.
 
-### Technologies Used
+## Run V1
 
-- **Google ADK (Agent Development Kit)** - Agent framework
-- **Gemini Models** - LLM for agent intelligence
-- **Python 3.8+** - Programming language
-- **GitHub REST API** - Account validation
-- **python-dotenv** - Environment management
-- **requests** - HTTP client library
+V1's original files and README are preserved without source edits in [`V1/`](./V1/). Use a separate virtual environment and environment file:
 
----
+```bash
+cd V1
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env to set GEMINI_API_KEY (and optional GITHUB_TOKEN).
+adk run .
+```
 
-## Getting Started & API Configuration
+V1's original README also documents its launcher and Web mode. Those original instructions are retained as part of the baseline; see the [V1 README](./V1/README.md). On current ADK, CLI app discovery is verified for the V1 directory. The original Web command has not been verified as independently discoverable and should be treated as a legacy limitation.
 
-### Prerequisites
+## Run V2
 
-- Python 3.8+
-- Gemini API Key (Get yours at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
-- GitHub Account / Personal Access Token (Optional, for higher rate limits)
+```bash
+cd V2
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env to set GEMINI_API_KEY (and optional GITHUB_TOKEN).
+./run.sh web
+```
 
-### Quick Start
+For the CLI, run `./run.sh cli`. The local launcher is available with `./run.sh launcher`; it binds to loopback by default. More details are in the [V2 README](./V2/README.md).
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/amiitt001/adk-hiring-agent.git
-   cd adk-hiring-agent
-   ```
+V1 and V2 use independent requirements, scripts, and `.env` files. Their default web ports differ in the provided scripts: V1 uses its original 8080 web port and V2 uses 8080 as well, so change one port if running both simultaneously.
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Repository and release history
 
-3. **Configure API Keys:**
+- Root Git history is preserved. Tag `v1.0.0` points to original commit `7232ba3`.
+- Branch `v2-development` is the active V2 development line.
+- V1 and V2 share this repository's Git history; V1 is a source snapshot, not a nested Git repository.
+- V2 milestones should be tested, reviewed, committed, pushed, and checked against the remote before they are described as synchronized.
+- No V2 beta or stable release tag has been created.
 
-   **Option A: Interactive Setup Launcher (Recommended)**
-   Launch the web setup UI to enter, test, and save your API keys:
-   ```bash
-   python launcher.py
-   # or
-   ./run.sh launcher
-   ```
-   Open `http://localhost:8888` in your browser, enter your Gemini API key, use the **🧪 Test Key** button to verify it live, and click **🚀 Save & Launch Hiring Agent**.
+## Known limitations
 
-   **Option B: Manual `.env` Setup**
-   Create a `.env` file in the project root:
-   ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
-   MODEL_NAME=gemini-3.5-flash
-   GITHUB_TOKEN=your_github_token_here  # Optional
-   ```
+- V2 does not parse uploaded PDF, DOCX, or TXT files; resume content is supplied as text.
+- V2 does not fetch repository contents, commit history, or project quality evidence.
+- Evaluation still relies on free-form model output; there is no calibrated scoring model or deterministic score aggregation.
+- There is no application authentication, authorization, candidate data retention/deletion workflow, or production session store.
+- V1 contains the original behavior and documentation as-is, including known inaccuracies and legacy setup limitations.
 
-4. **Run the Hiring Agent:**
-   - **Web UI Mode:**
-     ```bash
-     ./run.sh web
-     ```
-     Open `http://localhost:8080` to interact with the hiring agent.
-   
-   - **CLI Mode:**
-     ```bash
-     ./run.sh cli
-     ```
+## License
 
----
-
-## 🌐 Cloud Deployment (Render.com)
-
-You can easily deploy this system on Render using 1-Click Blueprint or Manual setup:
-
-- **Render Blueprint:** Connect your repository on Render and select `render.yaml`.
-- **Start Command:** `./start.sh`
-- **Environment Variables:** Set `GEMINI_API_KEY` in your Render dashboard.
-
-See [`RENDER_DEPLOYMENT.md`](file:///home/orion/Downloads/adk-hiring-agent-main/adk-hiring-agent-main/RENDER_DEPLOYMENT.md) for full instructions.
-
----
-
-**Good luck, and happy building!** 🚀
+See [`LICENSE`](./LICENSE).
