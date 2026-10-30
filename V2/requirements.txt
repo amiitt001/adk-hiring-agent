@@ -1,0 +1,5 @@
+# The agents use ADK's public API; keep ADK on its 1.x API generation until an
+# intentional 2.x migration and compatibility test suite is completed.
+google-adk>=1.0,<2
+python-dotenv>=1.0,<2
+requests>=2.31,<3
