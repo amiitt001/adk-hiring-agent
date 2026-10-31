@@ -4,7 +4,7 @@ V2 is the actively maintained implementation. It is isolated from the preserved 
 
 ## Setup
 
-Requires Python 3.10+, a Gemini API key, and optionally a GitHub token.
+Requires Python 3.10+, a Gemini API key, and optionally a GitHub token. The token is required to retrieve GitHub's public contribution breakdown; without it, profile verification and the public repository count still work, while contribution details are reported as unavailable.
 
 ```bash
 python3 -m venv .venv
@@ -40,7 +40,7 @@ These tests use mocked GitHub responses and do not require Gemini credentials. S
 
 - Root agent and agent tools are defined in `agent.py` and `tools_agents.py`.
 - `adk_agents/hiring_agent/` provides the ADK Web app discovery wrapper.
-- GitHub validation is limited to public profile metadata; repositories are not reviewed.
+- GitHub validation reports the public repository count and, when `GITHUB_TOKEN` is configured, a one-year public contribution summary grouped by repository (commits, pull requests, issues, and reviews). It identifies the most active repository by combined event count and by commit count. It does not inspect source code or establish authorship or skill.
 - Resume and job description are text inputs; file upload/parsing is not implemented.
 - Scoring is still free-form LLM output and is not schema-validated or deterministically aggregated.
 - Authentication, authorization, candidate-data lifecycle controls, model rate limits, and full evaluation E2E tests remain outstanding.

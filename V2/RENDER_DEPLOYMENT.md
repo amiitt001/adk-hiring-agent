@@ -35,7 +35,7 @@ If you prefer to configure the Web Service manually on Render:
 4. Add **Environment Variables**:
    - `GEMINI_API_KEY` = `your_gemini_api_key_here` (Required)
    - `MODEL_NAME` = `gemini-3.5-flash` (Optional, defaults to `gemini-3.5-flash`)
-   - `GITHUB_TOKEN` = `your_github_token_here` (Optional, for higher API rate limits)
+   - `GITHUB_TOKEN` = `your_github_token_here` (Optional; enables the public GraphQL contribution breakdown and raises REST rate limits)
 5. Click **Create Web Service**.
 
 ---

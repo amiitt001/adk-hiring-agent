@@ -6,7 +6,7 @@
 
 ## Executive assessment
 
-This repository is a small ADK prototype, not a production hiring system. It defines a conversational root agent, four LLM sub-agents, one GitHub profile function, an interactive local setup launcher, ADK's built-in web and CLI entry points, and a separately imported n8n workflow. It does not contain a custom hiring API, custom candidate web UI, uploaded-resume parser, repository analyzer, authentication system, or candidate-data retention policy.
+This repository is a small ADK prototype, not a production hiring system. It defines a conversational root agent, four LLM sub-agents, a GitHub REST/GraphQL evidence function, an interactive local setup launcher, ADK's built-in web and CLI entry points, and a separately imported n8n workflow. It does not contain a custom hiring API, custom candidate web UI, uploaded-resume parser, source-code reviewer, authentication system, or candidate-data retention policy.
 
 The most serious production risks remain unauthenticated public access to the ADK Web UI and the unauthenticated n8n webhook. The LLM-generated resume score is not schema-validated or deterministically computed. Candidate data may be sent to Gemini without an application-level privacy notice or retention controls. Human review is now stated in the Python and n8n verdict paths, but scores and evidence still need independent verification.
 
@@ -18,7 +18,7 @@ The most serious production risks remain unauthenticated public access to the AD
 | P0 | n8n webhook has no authentication configured and triggers paid model calls with arbitrary request data. | Open blocker |
 | P1 | Resume scoring is still LLM-generated prose with no output schema, point-range validation, or deterministic scoring implementation. | Partially mitigated by prompt changes; open |
 | P1 | ADK conversation orchestration relies on prompt-level sequencing and conversation context; no workflow state machine, role/rubric binding, candidate reset, or recovery tests exist. | Open |
-| P1 | No repository data is fetched. The former GitHub reviewer fabricated repository observations; this is now corrected to report "Not assessed." | Fixed in Python and n8n prompts |
+| P1 | The former GitHub reviewer fabricated repository observations. V2 now reports public repository counts and, with a token, bounded public contribution counts by repository; source code and repository quality remain unassessed. | Fabrication fixed; metadata collection added |
 | P1 | The original n8n response parser classified `NO HIRE` as `HIRE` because it tested for `HIRE` first. It also returned an LLM-derived score and decision. | Fixed: output now requires human review and no score is calculated |
 | P1 | n8n Gemini prompts previously instructed simulated GitHub assessments and automated hiring decisions. | Fixed in workflow prompts |
 | P1 | Original shell and launcher commands passed the repository root directly to ADK discovery/run, which does not expose this project as a valid named ADK app. | Fixed with `adk_agents/hiring_agent`; verified by ADK 1.39.1 `AgentLoader` |

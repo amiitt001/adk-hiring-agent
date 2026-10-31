@@ -11,7 +11,7 @@
 ### Candidate evaluation quality
 
 - Rewrote rubric and resume prompts to use explicit role requirements, a candidate-independent rubric, no protected or irrelevant traits, evidence citations, unknown/unscored evidence handling, and no autonomous employment recommendation.
-- Rewrote the GitHub reviewer prompt to say that repository quality, activity, code, testing, and documentation were not assessed because the app does not fetch them. It no longer fabricates evidence or scores.
+- Rewrote the GitHub reviewer prompt to distinguish returned public metadata from source-code, testing, documentation, authorship, and quality assessment. It no longer fabricates evidence or scores.
 - Rewrote the verdict prompt to summarize evidence and human-review questions without HIRE/NO HIRE, candidate ranking, composite score, or compensation guidance.
 - Updated root-agent wording and product documentation to describe decision support and the actual supported text-only interface.
 
@@ -19,6 +19,7 @@
 
 - Added [`github.py`](./github.py) and delegated the function tool to it.
 - Validates usernames and GitHub profile URLs, sends the optional token using the `Bearer` scheme, applies connect/read timeouts, distinguishes 404 from rate limits and network failures, rejects malformed success responses, and avoids including raw exception text in output.
+- Reports the public repository count from the REST profile response. When `GITHUB_TOKEN` is configured, one GraphQL request returns last-365-day public commit, pull request, issue, and review counts grouped by up to 100 repositories, plus the leading repository by combined contribution-event count and by commit count. GraphQL failure leaves profile validation intact and contribution evidence unavailable.
 - Removed age, completeness, repository count, and follower count as quality judgments. A profile with no repositories remains a verified profile, not a warning about candidate ability.
 
 ### Launcher, shell, and deployment
@@ -44,7 +45,7 @@
 1. **Add user authentication and authorization** to ADK Web and secure the n8n endpoint. Until then, do not expose these interfaces to public users or real candidate data.
 2. **Add typed schemas and deterministic scoring**: validate rubric weights and criterion scores; compute totals in code; reject malformed or out-of-range output; preserve unknown evidence explicitly.
 3. **Add explicit workflow state and session isolation**: role/rubric identifiers, candidate resets, controlled tool transitions, per-run context limits, and recovery behavior.
-4. **Implement actual repository analysis** only if justified: fetch bounded repository metadata and selected public content, identify ownership/forks, cite sources, treat private/unavailable evidence as unknown, and remove activity/volume penalties.
+4. **Implement source-level repository review** only if justified: fetch bounded selected public content, verify candidate-selected project relevance, cite source locations, treat private/unavailable evidence as unknown, and remove activity/volume penalties. Current counts do not establish authorship or skill.
 5. **Set candidate-data policy**: notice, consent, data minimization, retention/deletion, access logging, and provider approval.
 6. **Add ADK integration/E2E tests** for tool calls, session persistence/isolation, invalid model/key handling, retries, prompt injection, and no-GitHub paths.
 7. **Lock dependency resolution and scan it in CI**. Installation and runtime compatibility were verified for ADK 1.39.1, but dependencies remain ranges and the vulnerability scanner could not reach its advisory service.
@@ -53,5 +54,5 @@
 ## Trade-offs
 
 - The app remains on Google ADK and the existing CLI/Web surfaces. A custom authenticated web service would be a substantial architecture change; it is called out as a blocker rather than introduced without an approved design.
-- GitHub repository scoring was removed instead of pretending metadata was source-code review. This reduces apparent functionality but prevents fabricated and unfair conclusions.
+- GitHub contribution counts are descriptive evidence, not repository quality or candidate scores. Source-level repository review remains unimplemented.
 - `google-adk<2` is a compatibility guard. A temporary environment verified requirements installation, package consistency, root-agent import, and ADK app discovery with ADK 1.39.1. Gemini calls and a live ADK server were not exercised.
