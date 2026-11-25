@@ -4,7 +4,7 @@ V2 is the actively maintained implementation. It is isolated from the preserved 
 
 ## Setup
 
-Requires Python 3.10+, a Gemini API key, and optionally a GitHub token.
+Requires Python 3.10+, a Gemini API key, and optionally a GitHub token. The token is required to retrieve GitHub's public contribution breakdown; without it, profile verification and the public repository count still work, while contribution details are reported as unavailable.
 
 ```bash
 python3 -m venv .venv
@@ -14,6 +14,21 @@ cp .env.example .env
 ```
 
 Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in `.env`. Set `MODEL_NAME` to a supported Gemini model if you want to override the default. Never commit `.env` or real credentials.
+
+## Automatic API fallback
+
+Keep the primary Gemini key in `GEMINI_API_KEY`. Optionally configure additional Gemini keys and LiteLLM provider/model names in `.env`:
+
+```dotenv
+GEMINI_FALLBACK_KEYS=second_gemini_key,third_gemini_key
+MODEL_FALLBACKS=openai/gpt-4.1-mini
+OPENAI_API_KEY=your_openai_key
+MODEL_TIMEOUT_SECONDS=30
+```
+
+Each model call tries the primary Gemini key, additional Gemini keys in order, and then the configured LiteLLM models. Use providers that support tool calls and configure their credentials. Requests sent to a fallback provider can contain the current résumé, job description, and conversation history.
+
+Fallback is attempted on connection failures, HTTP 408, 429, 5xx, or a first-response timeout. Once a response starts streaming, interruptions are reported rather than replaying tool calls. The routing applies to V2 web and CLI agents; the independent n8n export uses its own HTTP nodes.
 
 ## Run
 
@@ -40,7 +55,7 @@ These tests use mocked GitHub responses and do not require Gemini credentials. S
 
 - Root agent and agent tools are defined in `agent.py` and `tools_agents.py`.
 - `adk_agents/hiring_agent/` provides the ADK Web app discovery wrapper.
-- GitHub validation is limited to public profile metadata; repositories are not reviewed.
+- GitHub validation reports the public repository count and, when `GITHUB_TOKEN` is configured, a one-year public contribution summary grouped by repository (commits, pull requests, issues, and reviews). It identifies the most active repository by combined event count and by commit count. It does not inspect source code or establish authorship or skill.
 - Resume and job description are text inputs; file upload/parsing is not implemented.
 - Scoring is still free-form LLM output and is not schema-validated or deterministically aggregated.
 - Authentication, authorization, candidate-data lifecycle controls, model rate limits, and full evaluation E2E tests remain outstanding.

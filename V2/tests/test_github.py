@@ -14,6 +14,7 @@ except ImportError:  # Keep the audit tests runnable in the minimal workspace im
         RequestException=type("RequestException", (Exception,), {}),
     )
     requests_stub.get = Mock()
+    requests_stub.post = Mock()
     sys.modules["requests"] = requests_stub
 
 import github
@@ -38,10 +39,13 @@ class GitHubValidationTests(unittest.TestCase):
         }
         get.return_value = response
 
-        result = github.github_validator("octocat")
+        with patch.dict("os.environ", {"GITHUB_TOKEN": ""}):
+            result = github.github_validator("octocat")
 
         self.assertEqual(result["status"], "VERIFIED")
         self.assertTrue(result["exists"])
+        self.assertEqual(result["public_repo_count"], 0)
+        self.assertEqual(result["public_contributions"]["status"], "AUTH_REQUIRED")
         self.assertNotIn("score", result)
         self.assertIn("not been assessed", result["assessment"])
 
@@ -76,6 +80,89 @@ class GitHubValidationTests(unittest.TestCase):
         result = github.github_validator("octocat")
         self.assertEqual(result["status"], "UNAVAILABLE")
         self.assertIsNone(result["exists"])
+
+    @patch.object(github.requests, "post")
+    def test_public_contribution_summary_counts_and_ranks_repositories(self, post):
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "data": {
+                "user": {
+                    "contributionsCollection": {
+                        "commitContributionsByRepository": [
+                            {"repository": {"nameWithOwner": "octocat/alpha", "url": "https://github.com/octocat/alpha", "isPrivate": False, "isFork": False, "isArchived": False}, "contributions": {"totalCount": 23}},
+                            {"repository": {"nameWithOwner": "octocat/beta", "url": "https://github.com/octocat/beta", "isPrivate": False, "isFork": True, "isArchived": False}, "contributions": {"totalCount": 8}},
+                            {"repository": {"nameWithOwner": "octocat/private", "url": "https://github.com/octocat/private", "isPrivate": True, "isFork": False, "isArchived": False}, "contributions": {"totalCount": 99}},
+                        ],
+                        "pullRequestContributionsByRepository": [
+                            {"repository": {"nameWithOwner": "octocat/alpha", "url": "https://github.com/octocat/alpha", "isPrivate": False, "isFork": False, "isArchived": False}, "contributions": {"totalCount": 2}},
+                        ],
+                        "issueContributionsByRepository": [],
+                        "pullRequestReviewContributionsByRepository": [],
+                    }
+                }
+            }
+        }
+        post.return_value = response
+
+        result = github.fetch_public_contributions("octocat", "test-token")
+
+        self.assertEqual(result["status"], "AVAILABLE")
+        self.assertEqual(result["totals_in_reported_repositories"]["commits"], 31)
+        self.assertEqual(result["totals_in_reported_repositories"]["pull_requests"], 2)
+        self.assertEqual(result["repositories_reported"], 2)
+        self.assertEqual(result["leading_commit_repository"]["name"], "octocat/alpha")
+        self.assertEqual(result["leading_commit_repository"]["commit_contributions"], 23)
+        self.assertEqual(result["leading_contribution_repository"]["name"], "octocat/alpha")
+        self.assertTrue(post.called)
+
+    def test_public_contributions_require_token(self):
+        result = github.fetch_public_contributions("octocat")
+        self.assertEqual(result["status"], "AUTH_REQUIRED")
+        self.assertEqual(result["repositories"], [])
+
+    @patch.object(github.requests, "get")
+    @patch.object(github.requests, "post")
+    def test_validator_combines_profile_count_with_graphql_summary(self, post, get):
+        profile = Mock(status_code=200)
+        profile.json.return_value = {
+            "login": "octocat", "public_repos": 12,
+            "created_at": "2020-01-01T00:00:00Z", "html_url": "https://github.com/octocat",
+        }
+        get.return_value = profile
+        graphql = Mock(status_code=200)
+        graphql.json.return_value = {
+            "data": {"user": {"contributionsCollection": {
+                "commitContributionsByRepository": [],
+                "pullRequestContributionsByRepository": [],
+                "issueContributionsByRepository": [],
+                "pullRequestReviewContributionsByRepository": [],
+            }}}
+        }
+        post.return_value = graphql
+
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}):
+            result = github.github_validator("octocat")
+
+        self.assertEqual(result["status"], "VERIFIED")
+        self.assertEqual(result["public_repo_count"], 12)
+        self.assertEqual(result["public_contributions"]["status"], "AVAILABLE")
+        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer test-token")
+
+    @patch.object(github.requests, "post")
+    def test_graphql_failure_does_not_invalidate_profile(self, post):
+        post.side_effect = github.requests.exceptions.Timeout("timeout")
+        result = github.fetch_public_contributions("octocat", "test-token")
+        self.assertEqual(result["status"], "UNAVAILABLE")
+        self.assertIsNone(result["leading_commit_repository"])
+
+    @patch.object(github.requests, "post")
+    def test_malformed_graphql_payload_is_unavailable(self, post):
+        response = Mock(status_code=200)
+        response.json.return_value = {"errors": [{"message": "internal details"}]}
+        post.return_value = response
+        result = github.fetch_public_contributions("octocat", "test-token")
+        self.assertEqual(result["status"], "UNAVAILABLE")
+        self.assertNotIn("internal details", str(result))
 
 
 if __name__ == "__main__":

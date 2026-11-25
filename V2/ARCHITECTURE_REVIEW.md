@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Python application is an ADK package whose `root_agent` is loaded by ADK's web or CLI command. The root agent delegates to agent tools for rubric creation, resume review, optional GitHub review, and evidence synthesis. GitHub profile lookup is a Python `FunctionTool`. The browser-based hiring interface itself is ADK Web; `launcher.py` is a separate configuration page, not the candidate evaluation UI. The n8n JSON is an independent workflow and is not exposed by the Render application.
+The Python application is an ADK package whose `root_agent` is loaded by ADK's web or CLI command. The root agent delegates to agent tools for rubric creation, resume review, optional GitHub evidence summary, and evidence synthesis. GitHub REST/GraphQL lookup is a Python `FunctionTool`. The browser-based hiring interface itself is ADK Web; `launcher.py` is a separate configuration page, not the candidate evaluation UI. The n8n JSON is an independent workflow and is not exposed by the Render application.
 
 ## File-by-file responsibility map
 
@@ -10,7 +10,7 @@ The Python application is an ADK package whose `root_agent` is loaded by ADK's w
 |---|---|
 | [`agent.py`](./agent.py) | Root conversational orchestrator, registers four agent tools and the GitHub validator function. State transitions are expressed in instructions, not code. |
 | [`tools_agents.py`](./tools_agents.py) | Defines RubricBuilder, ResumeReviewer, GitHubReviewer, and VerdictSynthesizer. Prompts have been revised for job relevance, prompt-injection resistance, evidence labels, and human review. Outputs remain free-form text. |
-| [`github.py`](./github.py) | New isolated GitHub REST profile check, username normalization, timeout and HTTP error handling, and safe status results. It fetches only `/users/{username}`. |
+| [`github.py`](./github.py) | GitHub REST profile lookup and optional GraphQL public contribution summary; counts public repositories, contribution types grouped by repository, and leading repository metadata. |
 | [`settings.py`](./settings.py) | New shared dotenv loading, `GEMINI_API_KEY`/`GOOGLE_API_KEY` aliasing, and centralized model selection. |
 | [`adk_agents/hiring_agent/`](./adk_agents/hiring_agent/) | ADK-discoverable wrapper that exposes the root agent under a valid app name; `adk web` expects an agent directory under an agents root. |
 | [`launcher.py`](./launcher.py) | Local API-key setup page and process launcher. It now defaults to loopback, does not echo stored secret values, bounds JSON requests, applies CSRF origin checks, and writes `.env` with mode `0600`. It is not intended as a public deployment setup endpoint. |
@@ -49,7 +49,8 @@ flowchart TD
     R --> GV[GitHubValidator FunctionTool]
     R --> GR[GitHubReviewer LlmAgent]
     R --> VS[VerdictSynthesizer LlmAgent]
-    GV --> GH[GitHub REST /users/{username}]
+    GV --> GH[GitHub REST profile /users/{username}]
+    GV --> GQL[GitHub GraphQL public contribution groups]
     RB --> G[Gemini via ADK]
     RR --> G
     GR --> G
@@ -66,7 +67,7 @@ Rubric output and candidate evidence move through conversation context rather th
 2. The root agent requests a job description and invokes RubricBuilder.
 3. The rubric text is shown and the agent requests resume text.
 4. ResumeReviewer reads the rubric and resume from the conversation and produces a free-form assessment.
-5. If a profile is supplied, the root calls `github_validator`; the function normalizes the input and makes a bounded GET to GitHub. If a profile exists, GitHubReviewer reports only profile metadata and explicitly marks repository-level items not assessed.
+5. If a profile is supplied, the root calls `github_validator`; the function normalizes the input and makes a bounded GET to the REST profile endpoint. It reports the API's public repository count. With `GITHUB_TOKEN`, it also makes one bounded GraphQL request for public commit, pull request, issue, and review contribution counts grouped by repository over the prior 365 days. It reports the leading repository by combined event count and by commit count. Without a token or when the query fails, the profile remains verified and contribution details are explicitly unavailable.
 6. When asked, VerdictSynthesizer summarizes evidence and human-review questions. It must not make a hiring decision.
 7. ADK returns its response through its Web UI or CLI. In the tested ADK 1.39.1 version, default storage is local `.adk` storage unless session/artifact services are configured; no explicit production storage policy is configured here.
 
@@ -77,7 +78,7 @@ Separately, the n8n workflow receives a webhook request (currently without authe
 | Consumer | Service | Calls/data | Failure handling |
 |---|---|---|---|
 | ADK agents | Gemini API through Google ADK | Job description and resume/profile evidence are model context. | No application-defined retry, fallback, or structured response validation. |
-| `github.py` | GitHub REST API | Public user-profile metadata only. Uses optional `GITHUB_TOKEN` and bounded timeout. | Distinguishes not-found from unavailable/rate-limited; maps network errors to safe messages. |
+| `github.py` | GitHub REST + GraphQL APIs | REST profile/public repository count; optional GraphQL public contribution types grouped by repository for the last 365 days. Uses optional `GITHUB_TOKEN` and bounded timeouts. | A GraphQL failure leaves profile verification intact and marks contribution evidence unavailable. Private repositories are excluded from the returned breakdown. |
 | `launcher.py` | Gemini model-list endpoint | Tests a user-provided API key via `x-goog-api-key` request header. | Timeout and generic network error handling; no retry. |
 | n8n workflow | Gemini REST endpoint | Four model calls, key read from n8n environment expression in an HTTP header. | HTTP nodes use `neverError`; non-success result interpretation remains weak. |
 | n8n workflow | GitHub REST API | Public user-profile endpoint, no repository data. | Error payload currently has no robust status-code normalization. |

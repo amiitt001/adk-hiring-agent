@@ -17,7 +17,7 @@
 ## Confirmed negative checks
 
 - No real API key was found in tracked source or `.env.example`; `.gitignore` excludes `.env` and common credential files.
-- GitHub username input is normalized and checked before constructing a fixed `https://api.github.com/users/...` URL. The Python validator does not accept arbitrary URLs for fetching, so no SSRF path was confirmed in that function.
+- GitHub username input is normalized and checked before constructing fixed GitHub REST and GraphQL endpoint URLs. The Python validator does not accept arbitrary URLs for fetching, so no SSRF path was confirmed in that function. The optional token is sent only to `api.github.com` over HTTPS and is not returned in tool output.
 - No resume upload or filesystem path handling exists, so no path traversal or malicious-document parser vulnerability was confirmed. File parsing is unsupported rather than merely untested.
 - No shell command is built from user-controlled input after removal of the old `fuser` shell call. `start.sh` uses an argument list via `exec`.
 - The launcher escapes stored custom variable names, builds new form rows with DOM APIs, uses `textContent` for status output, does not echo stored secrets, and applies basic security headers.

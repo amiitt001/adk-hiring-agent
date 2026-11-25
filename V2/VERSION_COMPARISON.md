@@ -6,7 +6,7 @@
 | Entrypoint | Original top-level `agent.py`, launcher, scripts, and ADK commands | ADK app wrapper at `adk_agents/hiring_agent`; `run.sh` selects Web, CLI, or setup launcher |
 | Orchestration | Prompt-led conversational sequencing with LLM sub-agents | Still prompt-led and free-form; prompts now require evidence and human review, but no workflow state machine exists |
 | Resume evaluation | Original prompt and claims | Revised prompt treats resume text as untrusted evidence and does not treat missing evidence as proof of inability |
-| GitHub | Profile validation plus a reviewer prompt that could imply repository evidence it did not retrieve | Bounded profile metadata validation; repository content/history are explicitly unassessed |
+| GitHub | Profile validation plus a reviewer prompt that could imply repository evidence it did not retrieve | Public repo count and optional one-year public contribution breakdown by repo; source content/quality remain unassessed |
 | Verdict | Original automated recommendation behavior | Evidence summary only; no HIRE/NO HIRE, ranking, or synthetic total score |
 | Configuration | Original dependency declarations and launcher behavior | Central model/API-key configuration, bounded dependencies, hardened local launcher |
 | Deployment | Original launcher fallback and wildcard CORS configuration | Key required before startup; assigned port used; non-root Docker runtime; authentication is still absent |
