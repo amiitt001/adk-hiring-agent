@@ -5,15 +5,15 @@ Simplified sub-agents for conversational workflow (without template variables).
 from google.adk.agents import LlmAgent
 
 try:
-    from .settings import MODEL_NAME as GEMINI_MODEL
+    from .settings import AGENT_MODEL
 except ImportError:
-    from settings import MODEL_NAME as GEMINI_MODEL
+    from settings import AGENT_MODEL
 
 
 # Rubric Builder - takes job description directly from conversation
 rubric_builder = LlmAgent(
     name="RubricBuilder",
-    model=GEMINI_MODEL,
+    model=AGENT_MODEL,
     description="Generates customized evaluation rubric from job description.",
     instruction="""
 You create one reusable, candidate-independent rubric from the job description.
@@ -42,7 +42,7 @@ Do not include a hiring threshold or candidate recommendation. Return only the r
 # Resume Reviewer - takes resume and rubric from conversation
 resume_reviewer = LlmAgent(
     name="ResumeReviewer",
-    model=GEMINI_MODEL,
+    model=AGENT_MODEL,
     description="Evaluates candidate resume against the rubric.",
     instruction="""
 Evaluate the supplied resume against the candidate-independent rubric in the conversation.
@@ -77,7 +77,7 @@ except ImportError:
 # GitHub reviewer reports verified profile metadata only; it does not fabricate repository analysis.
 github_reviewer = LlmAgent(
     name="GitHubReviewer",
-    model=GEMINI_MODEL,
+    model=AGENT_MODEL,
     description="Summarizes verified public GitHub repository and contribution metadata.",
     instruction="""
 You review optional GitHub evidence for a human hiring team.
@@ -107,7 +107,7 @@ profile data.
 # Verdict Synthesizer - combines all evaluations
 verdict_synthesizer = LlmAgent(
     name="VerdictSynthesizer",
-    model=GEMINI_MODEL,
+    model=AGENT_MODEL,
     description="Provides final hiring verdict based on all evaluations.",
     instruction="""
 You summarize candidate evaluation evidence for a human hiring team. You do not make employment

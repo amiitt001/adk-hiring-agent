@@ -15,6 +15,21 @@ cp .env.example .env
 
 Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) in `.env`. Set `MODEL_NAME` to a supported Gemini model if you want to override the default. Never commit `.env` or real credentials.
 
+## Automatic API fallback
+
+Keep the primary Gemini key in `GEMINI_API_KEY`. Optionally configure additional Gemini keys and LiteLLM provider/model names in `.env`:
+
+```dotenv
+GEMINI_FALLBACK_KEYS=second_gemini_key,third_gemini_key
+MODEL_FALLBACKS=openai/gpt-4.1-mini
+OPENAI_API_KEY=your_openai_key
+MODEL_TIMEOUT_SECONDS=30
+```
+
+Each model call tries the primary Gemini key, additional Gemini keys in order, and then the configured LiteLLM models. Use providers that support tool calls and configure their credentials. Requests sent to a fallback provider can contain the current résumé, job description, and conversation history.
+
+Fallback is attempted on connection failures, HTTP 408, 429, 5xx, or a first-response timeout. Once a response starts streaming, interruptions are reported rather than replaying tool calls. The routing applies to V2 web and CLI agents; the independent n8n export uses its own HTTP nodes.
+
 ## Run
 
 ```bash

@@ -24,9 +24,9 @@ except ImportError:
     )
 
 try:
-    from .settings import MODEL_NAME
+    from .settings import AGENT_MODEL
 except ImportError:
-    from settings import MODEL_NAME
+    from settings import AGENT_MODEL
 
 import os
 
@@ -45,7 +45,7 @@ verdict_tool = AgentTool(agent=verdict_synthesizer)
 
 root_agent = LlmAgent(
     name="ConversationalHiringOrchestrator",
-    model=MODEL_NAME,
+    model=AGENT_MODEL,
     description=(
         "An interactive hiring assistant that orchestrates specialized sub-agents "
         "to evaluate candidates step-by-step through conversation."

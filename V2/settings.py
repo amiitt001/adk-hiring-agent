@@ -4,6 +4,11 @@ import os
 
 from dotenv import load_dotenv
 
+if __package__:
+    from .model_fallback import build_model
+else:
+    from model_fallback import build_model
+
 load_dotenv()
 
 # google-adk's Gemini provider reads GOOGLE_API_KEY. Keep the public-facing
@@ -15,3 +20,4 @@ elif os.getenv("GOOGLE_API_KEY") and not os.getenv("GEMINI_API_KEY"):
 
 DEFAULT_MODEL_NAME = "gemini-3.5-flash"
 MODEL_NAME = os.getenv("MODEL_NAME", DEFAULT_MODEL_NAME).strip() or DEFAULT_MODEL_NAME
+AGENT_MODEL = build_model(MODEL_NAME, os.environ)
