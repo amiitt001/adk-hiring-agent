@@ -53,6 +53,10 @@ For the CLI, run `./run.sh cli`. The local launcher is available with `./run.sh 
 
 V1 and V2 use independent requirements, scripts, and `.env` files. Their default web ports differ in the provided scripts: V1 uses its original 8080 web port and V2 uses 8080 as well, so change one port if running both simultaneously.
 
+## Deploy V2 to Render
+
+Use the root-level `render.yaml` as a Render Blueprint; it sets Render's root directory to `V2`, where the requirements and startup script are located. For an existing manually configured service, set **Root Directory** to `V2`, or use build command `pip install -r V2/requirements.txt` and start command `cd V2 && ./start.sh`.
+
 ## Repository and release history
 
 - Root Git history is preserved. Tag `v1.0.0` points to original commit `7232ba3`.
