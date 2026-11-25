@@ -8,7 +8,7 @@ This guide provides step-by-step instructions to deploy the **AI-Powered Convers
 
 ## ⚡ Option 1: Render Blueprint (1-Click Deployment - Recommended)
 
-Render supports Infrastructure-as-Code using the [`render.yaml`](file:///home/orion/Downloads/adk-hiring-agent-main/adk-hiring-agent-main/render.yaml) file included in this repository.
+Render supports Infrastructure-as-Code using the [root-level `render.yaml`](../render.yaml), which points the service root directory to `V2/`.
 
 1. **Push your code** to a GitHub or GitLab repository.
 2. Go to [Render Dashboard](https://dashboard.render.com/) and click **New +** -> **Blueprint**.
@@ -30,6 +30,7 @@ If you prefer to configure the Web Service manually on Render:
    - **Environment:** `Python 3`
    - **Region:** Any (e.g. Oregon, Frankfurt)
    - **Branch:** `main`
+   - **Root Directory:** `V2` (the application and its `requirements.txt` are in this directory)
    - **Build Command:** `pip install -r requirements.txt`
    - **Start Command:** `./start.sh`
 4. Add **Environment Variables**:
